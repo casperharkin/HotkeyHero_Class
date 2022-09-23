@@ -1,72 +1,163 @@
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
-; '#Warn' is disabled as this incorrectly errors this script
+; #Warn  ; Enable warnings to assist with detecting common errors.
 SendMode Input  ; Recommended for new scripts due to its superior speed and reliability.
 SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-#SingleInstance
 
-SetCapsLockState, AlwaysOff
-#include %A_ScriptDir%\Replacer.ahk ;	Include the hotstring file
 
-;	Formatting options for GUI
-gui_control_options := "xm w220 " . cForeground . " -E0x200"
-    ; -E0x200 removes border around Edit controls
+New HotkeyHero
+Exit
 
-;	Initialise with gui_state set to closed
-gui_state = closed
+Class HotkeyHero {
+   __New(){
+      ;------------------------------------------
+      ;----------------[Settings]----------------
+      ;------------------------------------------
 
-;	Allow normal CapsLock functionality to be toggled by Alt+CapsLock
-!CapsLock::
+	  ; Setting up Hotkeys
+      SetCapsLockState, AlwaysOff
+      This.CapsHotkey := "!CapsLock"
+      This.CommanderHotkey := "CapsLock & Space"
+	  This.ShortCutHotKey := "s"
+	  This.CommandsHotKey := "z" ;WIP
 
-	GetKeyState, capsstate, CapsLock, T ;(T indicates a Toggle. capsstate is an arbitrary varible name)
-    if capsstate = U
-        SetCapsLockState, AlwaysOn
-    else
-        SetCapsLockState, AlwaysOff
-    return
+	  ;Setting Up Shortcuts
+	  This.FoldersDDL := "Documents|Downloads"
+	  This.ProgramsDDL := "Notepad|Chrome|Calc"
+	  This.WebsitesDDL := "www.google.com|www.reddit.com"
 
-;	Launch GUI
-CapsLock & Space::
-gui_spawn:
-	if gui_state = open
-    {
-        ; If the GUI is already open, close it.
-        gui_destroy()
-        return
+	  ;Setting Hotstrings
+	  This.Replacer := {}
+	  This.AddTextReplacment("@", "myemail@email.com")
+	  This.AddTextReplacment("ddd",  A_DD "/" A_MM "/" A_YYYY)
+      ;------------------------------------------
+      ;------------------------------------------	
+      
+      This.CreateHotkey(This.CapsHotkey, "CapsLockHotkeyHandler")
+      This.CreateHotkey(This.CommanderHotkey, "CommanderHotkeyHandler")
+      This.MainGui()
+   }
+   
+    AddTextReplacment(hotstring, Value){
+	 	This.Replacer[hotstring] := Value
     }
-	else
-	{
-		gui_state = open
+	
 
-		Gui, Margin, 16, 16
-		;Gui, Color, 1d1f21, 282a2e
-		Gui, +AlwaysOnTop -SysMenu +ToolWindow -caption +Border
-		Gui, Font, s11, Segoe UI
-		Gui, Add, Text, %gui_control_options% vgui_main_title, Hello - How can I help?
-		Gui, Font, s10, Segoe UI
-		Gui, Add, Edit, %gui_control_options% vUserInputBox gInstantCallback
-		Gui, Show,, myGUI
-		return
+   MainGui(){
+      Static
+      Gui Main: +AlwaysOnTop -SysMenu +ToolWindow -caption +Border +HwndhMainGUI
+      This.MainGUI := hMainGUI
+      Gui Main: Margin, 16, 16
+      Gui Main: Font, s11, Segoe UI
+      Gui Main: Add, Text, % "xm w220 -E0x200 +Center +HWNDhTitle", Hello - How can I help?
+      This.Bind(hTitle, "MoveGui")
+      Gui Main: Add, Edit, % "xm w220 -E0x200 +Center vUserInputBox +HWNDhEditControl"
+      This.Bind(This.hEditControl := hEditControl, "Callback")
+   }
+   
+   CreateHotkey(Hotkey, FunctionCall, Params*){
+      handler := ObjBindmethod(this, FunctionCall, Params*)
+      Hotkey, % Hotkey, % handler, On
+   }
+   
+   Bind(Hwnd, Method, Params*){
+      BoundFunc := ObjBindMethod(This, Method, Params*)
+      GuiControl +g, % Hwnd, % BoundFunc
+   }
+   
+   CapsLockHotkeyHandler(){
+      GetKeyState, KeyState, CapsLock, T 
+      if (KeyState = "U")
+		 SetCapsLockState, AlwaysOn
+      else
+         SetCapsLockState, AlwaysOff
+   }
+   
+   CommanderHotkeyHandler(){
+      Gui Shortcutter: Destroy
+      If !WinExist("ahk_id " This.MainGUI){
+         WinGetActiveTitle, GetActiveTitle
+         This.ActiveTitle := GetActiveTitle
+         This.GuiShow(This.MainGUI)
+      }
+      Else
+         This.GuiClose(This.MainGUI)
+   }
+   
+   GuiShow(GuiHwnd){
+      GuiControl, Text, % This.hEditControl 
+      Gui, % GuiHwnd ": Show"
+   }
+   
+   GuiClose(GuiHwnd){
+      Gui, % GuiHwnd ": Hide"
+   }
+   
+   Callback(){
+      ControlGetText, EditControlText,, % " ahk_id " This.hEditControl
+      
+      for hotstring in This.Replacer
+      if (hotstring = EditControlText) {
+         This.GuiClose(This.MainGUI)
+         WinActivate, % This.ActiveTitle
+         SendInput % This.Replacer[hotstring]
+      }
+      
+      if (EditControlText =  This.CommandsHotKey) {
+         This.GuiClose(This.MainGUI)
+         MsgBox % "You Clicked: " This.CommandsHotKey "!"
+      }else  if (EditControlText = This.ShortCutHotKey) {
+         This.GuiClose(This.MainGUI)
+         This.Shortcutter()
+      }}
+   
+   MoveGui(){
+      PostMessage, 0xA1, 2,
+   }
+   
+   ShortCutChoice(){
+      if (This.DDL_State = "Folders") or (This.DDL_State = "") {
+         ControlGetText, selection,, % " ahk_id " This.hfolderChoice
+         Run, % "C:\Users\" A_Username "\" . selection
+         Gui Shortcutter: Destroy
+      }
+      if (This.DDL_State = "Programs"){
+         ControlGetText, selection,, % " ahk_id " This.hprogramChoice
+         Run, % selection
+         Gui Shortcutter: Destroy
+      }
+      if (This.DDL_State = "Websites"){
+         ControlGetText, selection,, % " ahk_id " This.hWebsitesChoice
+         Run, % selection
+         Gui Shortcutter: Destroy
+      }
 	}
+   
+   TabControler(){
+      GuiControlGet, tabselection,, % This.hTab2
+      This.DDL_State := tabselection
+   }
+   
+   Shortcutter(){
+      Static
+      Gui Shortcutter: Add, Tab2, x2 y-1 w410 h60 +HwndhTab2 , Folders|Programs|Websites
+      This.Bind(This.hTab2 := hTab2, "TabControler")
+      
+      Gui Shortcutter: +AlwaysOnTop -SysMenu +ToolWindow +caption +Border +HwndhShortCutter
+      This.hShortCutter := hShortCutter
+      
+      Gui Shortcutter: Tab, Folders
+      Gui Shortcutter: Add, DropDownList, x12 y29 w340 +HwndhfolderChoice Sort, % This.FoldersDDL
+      This.Bind(This.hfolderChoice := hfolderChoice, "ShortCutChoice")
+      
+      Gui Shortcutter: Tab, Programs
+      Gui Shortcutter: Add, DropDownList, x12 y29 w340 +HwndhprogramChoice Sort, % This.ProgramsDDL 
+      This.Bind(This.hprogramChoice := hprogramChoice, "ShortCutChoice")
+      
+      Gui Shortcutter: Tab, Websites
+      Gui Shortcutter: Add, DropDownList, x12 y29 w340 +HwndhWebsitesChoice Sort, % This.WebsitesDDL
+      This.Bind(This.hWebsitesChoice := hWebsitesChoice, "ShortCutChoice")
 
-;	Callback function for when the input field changes
-InstantCallback:
-	Gui, Submit, NoHide
-	#Include %A_ScriptDir%\Shortcutter.ahk ;	Each row calls a seperate 'modual' of the HotkeyHero program
-	#Include %A_ScriptDir%\Commands.ahk
-	#Include %A_ScriptDir%\Buttons.ahk
-	return
-
-#WinActivateForce
-
-;	Closed app on Esc key
-GuiEscape:
-	gui_destroy()
-	return
-
-;	Closing app with change to gui_state & activating previous Win
-gui_destroy()
-{
-	global gui_state = closed
-	Gui, Destroy
-	WinActivate
-}
+      Gui Shortcutter: Show, w416 h63, Shortcutter
+   }
+  
+}              
